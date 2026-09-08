@@ -1,0 +1,18 @@
+RABBIT HOLE - HOW TO PLAY
+
+Double-click Play Rabbit Hole.cmd in this folder.
+
+PLAY NOW
+Opens the normal ten-question game in your browser.
+
+PLAY FROM BACKGROUND
+Choose an interval (15 minutes by default), then click Play from background.
+The window closes. A small prompt appears near the taskbar after each interval.
+Click it, choose a topic, answer the question, and let it fade away.
+
+Want to try it immediately? Right-click the Rabbit Hole system-tray icon and
+choose Question now. The icon may be under the ^ hidden-icons arrow.
+Use that menu to pause reminders or quit the background game.
+
+Internet required. No question dataset or scores are saved.
+The game files live in the hidden Rabbit Hole folder beside this launcher.
