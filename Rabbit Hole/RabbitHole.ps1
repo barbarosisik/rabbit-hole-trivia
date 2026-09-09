@@ -7,6 +7,11 @@ $script:background = $false
 $script:intervalMinutes = 15
 $script:question = $null
 $script:answered = $false
+$script:turnQuestions = @()
+$script:turnIndex = 0
+$script:turnScore = 0
+$script:turnCorrect = 0
+$script:turnStreak = 0
 $script:networkProcess = $null
 $script:pending = $null
 $script:lastRequest = [datetime]::MinValue
@@ -25,7 +30,7 @@ $script:menu = Read-Window @'
  <Window.Resources><Style TargetType="Button"><Setter Property="Margin" Value="0,6,0,6"/><Setter Property="Padding" Value="15"/><Setter Property="FontSize" Value="16"/><Setter Property="Background" Value="#D6FA83"/><Setter Property="Foreground" Value="#17200C"/></Style></Window.Resources>
  <StackPanel Margin="30"><TextBlock Text="rabbit hole" FontSize="32" FontWeight="Bold" Foreground="#D6FA83"/><TextBlock Text="A little curiosity break." Margin="0,5,0,25" Foreground="#A9AF9C"/>
  <Button Name="Play" Content="Play now"/><TextBlock Text="Open a ten-question round in your browser." Foreground="#A9AF9C" Margin="0,0,0,15"/>
- <Button Name="Background" Content="Play from background"/><TextBlock Text="Close this window and get a small trivia prompt near your taskbar. Click it to pick a topic and answer." TextWrapping="Wrap" Foreground="#A9AF9C"/>
+ <Button Name="Background" Content="Play from background"/><TextBlock Text="Close this window and get a small trivia prompt near your taskbar. Click it to pick a topic and answer three questions." TextWrapping="Wrap" Foreground="#A9AF9C"/>
  <StackPanel Orientation="Horizontal" Margin="0,20,0,10"><TextBlock Text="Remind me every " VerticalAlignment="Center"/><ComboBox Name="Interval" Width="120" SelectedIndex="1"><ComboBoxItem Content="5 minutes" Tag="5"/><ComboBoxItem Content="15 minutes" Tag="15"/><ComboBoxItem Content="30 minutes" Tag="30"/><ComboBoxItem Content="60 minutes" Tag="60"/></ComboBox></StackPanel>
  <TextBlock Text="Tray menu: question now, pause, or quit.&#10;Internet required. Questions are never saved." Foreground="#A9AF9C" FontSize="12" Margin="0,10,0,0"/>
  </StackPanel>
@@ -42,6 +47,7 @@ $script:popup = Read-Window @'
    <TextBlock Name="Status" TextWrapping="Wrap" Foreground="#A9AF9C" Margin="0,8,0,5"/>
    <StackPanel Name="Answers"/>
    <TextBlock Name="Feedback" TextWrapping="Wrap" Foreground="#D6FA83" FontSize="16" Margin="0,10,0,5"/>
+   <Button Name="NextQuestion" Content="Next question" Visibility="Collapsed" Margin="0,8,0,5" Padding="12,9" Background="#D6FA83" Foreground="#17200C"/>
    <TextBlock Name="Credits" Text="Questions: Open Trivia DB - CC BY-SA 4.0" Foreground="#A9AF9C" FontSize="10" Margin="0,6,0,0"/>
   </StackPanel></ScrollViewer>
   </StackPanel>
@@ -52,7 +58,7 @@ $script:tray = New-Object System.Windows.Forms.NotifyIcon
 $script:tray.Icon = [Drawing.SystemIcons]::Information
 $script:tray.Text = 'Rabbit Hole - background trivia'
 $script:trayMenu = New-Object System.Windows.Forms.ContextMenuStrip
-$script:nowItem = $trayMenu.Items.Add('Question now')
+$script:nowItem = $trayMenu.Items.Add('Question turn now')
 $script:pauseItem = $trayMenu.Items.Add('Pause reminders')
 $script:playItem = $trayMenu.Items.Add('Play a full round')
 $script:quitItem = $trayMenu.Items.Add('Quit Rabbit Hole')
@@ -94,6 +100,8 @@ function Dismiss-Popup {
     $expiry.Stop(); $fade.Stop(); Cancel-Request
     $popup.Hide(); $popup.Opacity = 1
     $script:question = $null; $script:answerButtons = @()
+    $script:turnQuestions = @(); $script:turnIndex = 0; $script:turnScore = 0; $script:turnCorrect = 0; $script:turnStreak = 0
+    $popup.FindName('NextQuestion').Visibility = 'Collapsed'
     $popup.FindName('Answers').Children.Clear()
     $popup.FindName('Prompt').Text = 'Pick your rabbit hole.'
     $popup.FindName('Feedback').Text = ''
@@ -105,7 +113,7 @@ function Begin-Fade {
     $fade.Start()
 }
 function Show-Reminder {
-    if (-not $script:background) { return }
+    if (-not $script:background -or $script:popupState -ne 'closed') { return }
     Cancel-Request; $reminder.Stop(); $expiry.Stop(); $fade.Stop()
     $script:question = $null; $script:answered = $false
     $script:popupState = 'teaser'
@@ -126,7 +134,7 @@ function Expand-Popup {
     $popup.FindName('Categories').Visibility = 'Visible'
     $popup.FindName('Categories').IsEnabled = $true
     $popup.FindName('Prompt').Text = 'Pick your rabbit hole.'
-    $popup.FindName('Status').Text = 'One question. No timer. Just curiosity.'
+    $popup.FindName('Status').Text = 'Three questions. No timer. Just curiosity.'
     $popup.FindName('Feedback').Text = ''
     $popup.UpdateLayout(); Position-Popup
     $null = $popup.Activate()
@@ -148,7 +156,10 @@ function Show-Question($Q) {
     $script:popupState = 'question'
     $popup.FindName('Categories').Visibility = 'Collapsed'
     $popup.FindName('Prompt').Text = [uri]::UnescapeDataString($Q.question)
-    $popup.FindName('Status').Text = ([uri]::UnescapeDataString($Q.category)) + ' / ' + $Q.difficulty
+    $popup.FindName('Status').Text = ('Question {0}/3 | {1} pts | ' -f ($script:turnIndex + 1), $script:turnScore) + ([uri]::UnescapeDataString($Q.category)) + ' / ' + $Q.difficulty
+    $popup.FindName('Feedback').Text = ''
+    $popup.FindName('NextQuestion').Visibility = 'Collapsed'
+    $popup.FindName('QuestionScroll').ScrollToTop()
     $popup.FindName('Answers').Children.Clear()
     $script:answerButtons = @()
     $choices = @(@{Text=[uri]::UnescapeDataString($Q.correct_answer); Correct=$true})
@@ -173,10 +184,35 @@ function Submit-Answer($Button) {
     }
     $prefix = if ($Button.Tag.Correct) { 'Exactly right! ' } else { 'A fact for next time. ' }
     $popup.FindName('Feedback').Text = $prefix + 'Answer: ' + [uri]::UnescapeDataString($script:question.correct_answer)
-    $popup.FindName('Status').Text = 'Closing in 12 seconds. Next prompt in ' + $script:intervalMinutes + ' minutes.'
+    if ($Button.Tag.Correct) {
+        $script:turnCorrect++; $script:turnStreak++
+        $points = switch ($script:question.difficulty) { 'medium' {150} 'hard' {200} default {100} }
+        $script:turnScore += $points + [math]::Min($script:turnStreak - 1, 5) * 25
+    } else { $script:turnStreak = 0 }
+    $expiry.Stop()
+    if ($script:turnIndex -eq 2) {
+        $script:popupState = 'result'
+        $popup.FindName('Status').Text = ('3/3 complete | {0}/3 correct | {1} points. Closing in 8 seconds.' -f $script:turnCorrect, $script:turnScore)
+        $script:turnQuestions = @(); $script:question = $null
+        $popup.FindName('NextQuestion').Content = 'Done'
+        $expiry.Interval = [timespan]::FromSeconds(8)
+    } else {
+        $popup.FindName('Status').Text = ('Question {0}/3 | {1} points. Next when you are ready.' -f ($script:turnIndex + 1), $script:turnScore)
+        $popup.FindName('NextQuestion').Content = 'Next question'
+        $expiry.Interval = [timespan]::FromMinutes(5)
+    }
+    $popup.FindName('NextQuestion').Visibility = 'Visible'
     $popup.UpdateLayout(); Position-Popup
-    $expiry.Stop(); $expiry.Interval = [timespan]::FromSeconds(12); $expiry.Start()
+    $popup.FindName('NextQuestion').BringIntoView()
+    $expiry.Start()
 }
+function Next-Question {
+    if ($script:popupState -eq 'result') { Dismiss-Popup; return }
+    if ($script:popupState -ne 'answer' -or -not $script:answered) { return }
+    $script:turnIndex++
+    Show-Question $script:turnQuestions[$script:turnIndex]
+}
+
 function Fetch-Question([string]$Category) {
     if ($script:pending) { return }
     if (([datetime]::Now - $script:lastRequest).TotalSeconds -lt 6) {
@@ -185,7 +221,7 @@ function Fetch-Question([string]$Category) {
     }
     $script:lastRequest = [datetime]::Now
     $popup.FindName('Categories').IsEnabled = $false
-    $popup.FindName('Status').Text = 'Finding a fresh question...'
+    $popup.FindName('Status').Text = 'Finding three fresh questions...'
     try {
         $nodePath = (Get-Command node.exe -ErrorAction Stop).Source
         $startInfo = New-Object Diagnostics.ProcessStartInfo
@@ -221,13 +257,16 @@ function Poll-Question {
     try {
         if ($script:networkProcess.ExitCode -ne 0) { throw 'Could not reach the question service.' }
         $data = $script:pending.GetAwaiter().GetResult() | ConvertFrom-Json
-        if ($data.response_code -ne 0 -or @($data.results).Count -ne 1) { throw 'The trivia service is busy. Pick a topic to retry in a few seconds.' }
-        $q = $data.results[0]
-        if (-not $q.question -or -not $q.correct_answer -or @($q.incorrect_answers).Count -ne 3) { throw 'The trivia service returned an incomplete question. Please retry.' }
-        Show-Question $q
+        if ($data.response_code -ne 0 -or @($data.results).Count -ne 3) { throw 'The trivia service is busy. Pick a topic to retry in a few seconds.' }
+        foreach ($q in $data.results) {
+            if (-not $q.question -or -not $q.correct_answer -or @($q.incorrect_answers).Count -ne 3) { throw 'The trivia service returned an incomplete question. Please retry.' }
+        }
+        $script:turnQuestions = @($data.results)
+        $script:turnIndex = 0; $script:turnScore = 0; $script:turnCorrect = 0; $script:turnStreak = 0
+        Show-Question $script:turnQuestions[0]
     } catch {
         $popup.FindName('Categories').IsEnabled = $true
-        $popup.FindName('Status').Text = 'Could not load a question. Check your connection, then pick a topic to retry.'
+        $popup.FindName('Status').Text = 'Could not load this turn. Check your connection, wait a few seconds, then pick a topic to retry.'
     } finally { Cancel-Request }
 }
 function Stop-Game {
@@ -268,6 +307,7 @@ $popup.Add_SizeChanged({ Position-Popup })
 $popup.Add_Closing({ param($sender,$e) if (-not $script:closing) { $e.Cancel = $true; Dismiss-Popup } })
 $popup.FindName('Dismiss').Add_Click({ Dismiss-Popup })
 $popup.FindName('Teaser').Add_Click({ Expand-Popup })
+$popup.FindName('NextQuestion').Add_Click({ Next-Question })
 $popup.Add_PreviewKeyDown({param($sender,$e) if ($e.Key -eq 'Escape') { Dismiss-Popup; $e.Handled = $true }})
 $reminder.Add_Tick({ Show-Reminder })
 $expiry.Add_Tick({ Begin-Fade })
@@ -289,23 +329,39 @@ if ($SelfTest) {
     $script:background = $true
     Schedule-Next
     if ($reminder.Interval.TotalMinutes -ne 15 -or -not $reminder.IsEnabled) { throw 'Reminder schedule failed' }
-    Show-Question $fixture
-    if ($script:answerButtons.Count -ne 4) { throw 'Answer creation failed' }
-    Submit-Answer ($script:answerButtons | Where-Object {$_.Tag.Correct})
-    if (-not $script:answered -or $expiry.Interval.TotalSeconds -ne 12) { throw 'Answer feedback failed' }
+    $script:turnQuestions = @($fixture, $fixture, $fixture)
+    Show-Question $script:turnQuestions[0]
+    for ($i = 0; $i -lt 3; $i++) {
+        if ($script:turnIndex -ne $i -or $script:answerButtons.Count -ne 4) { throw 'Three-question progression failed' }
+        $right = $script:answerButtons | Where-Object {$_.Tag.Correct}
+        Submit-Answer $right
+        $points = $script:turnScore
+        Submit-Answer $right
+        if ($script:turnScore -ne $points) { throw 'Duplicate-answer guard failed' }
+        if ($i -lt 2) {
+            if ($expiry.Interval.TotalMinutes -ne 5 -or $popup.FindName('NextQuestion').Visibility -ne 'Visible') { throw 'Next/feedback failed' }
+            Next-Question
+        }
+    }
+    if ($script:turnScore -ne 375 -or $script:turnCorrect -ne 3 -or $script:popupState -ne 'result' -or $expiry.Interval.TotalSeconds -ne 8 -or $script:turnQuestions.Count) { throw 'Three-question result failed' }
+    Next-Question
+    if ($script:question -or $script:turnQuestions.Count -or $popup.FindName('Answers').Children.Count) { throw 'Question clearing failed' }
+    $script:turnQuestions = @($fixture, $fixture, $fixture)
+    Show-Question $script:turnQuestions[0]
+    Submit-Answer ($script:answerButtons | Where-Object {-not $_.Tag.Correct} | Select-Object -First 1)
+    if ($script:turnScore -ne 0 -or $script:turnStreak -ne 0) { throw 'Wrong-answer scoring failed' }
     Dismiss-Popup
-    if ($script:question -or $popup.FindName('Answers').Children.Count) { throw 'Question clearing failed' }
     if ($OnlineTest) {
         Fetch-Question '15'
         while ($script:pending) { Start-Sleep -Milliseconds 150; Poll-Question }
-        if ($script:popupState -ne 'question' -or -not $script:question) { throw 'Live background fetch failed' }
+        if ($script:popupState -ne 'question' -or $script:turnQuestions.Count -ne 3) { throw 'Live background fetch failed' }
         Write-Output 'PASS: live asynchronous question fetch through the background game.'
         Dismiss-Popup
     }
     $script:paused = $true; Schedule-Next
     if ($reminder.IsEnabled) { throw 'Pause failed' }
     Stop-Game
-    Write-Output 'PASS: WPF construction, 15-minute scheduling, four answers, feedback, dismissal, memory clearing, pause and cleanup.'
+    Write-Output 'PASS: WPF construction, 15-minute scheduling, three-question turns, scoring, feedback, Next, result expiry, dismissal, memory clearing, pause and cleanup.'
     exit 0
 }
 $app = New-Object Windows.Application

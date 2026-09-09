@@ -1,5 +1,7 @@
 # macOS native background-mode handoff
 
+**Implemented on macOS:** see `macOS/`, the macOS section in `README.md`, and `docs/MACOS-VALIDATION.md`. The text below records the original handoff; the requested Mac experience now uses **three questions per turn**, explicit Next buttons, and an eight-second result display. Windows now also uses three-question turns with Next and an eight-second result.
+
 ## Goal
 
 Keep the existing browser trivia game, and add a native macOS version of the background experience. This repository contains the working Windows implementation as a behavioral reference; it contains no native macOS project yet.

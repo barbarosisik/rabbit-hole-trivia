@@ -31,11 +31,12 @@ BACKGROUND MODE
 3. After the interval, a small custom notification appears above the right side
    of the primary monitor's taskbar. It does not take focus from your work.
 4. Click the prompt to expand it upward, then choose a category and answer.
-5. The correct answer stays visible for 12 seconds, then the popup fades away.
+5. Answer three questions, using Next between questions. After the third answer,
+   the correct answer and turn score stay for eight seconds, then fade away.
    The next interval starts when it disappears.
 
 Right-click the tray icon (it may be under the hidden-icons arrow):
-- Question now: try a popup immediately. Double-clicking the icon does this too.
+- Question turn now: try a popup immediately. Double-clicking the icon does this too.
 - Pause reminders / Resume reminders.
 - Play a full round: open the browser game while reminders remain running.
 - Quit Rabbit Hole: stop the background process completely.
@@ -50,7 +51,7 @@ Settings last only for the current run. Closing the browser does not stop tray m
 
 The game is tucked away in this folder; it does not run at startup or install a service.
 Background mode uses Windows PowerShell, Windows desktop UI libraries, and the
-Node.js installation already on this computer. Node uses the system certificate
-store to fetch each question in a short-lived hidden process. Nothing is installed.
+Node.js 24 or newer installed on the computer. Node uses the system certificate
+store to fetch each three-question turn in a short-lived hidden process. Nothing is installed.
 The launcher does not change your execution policy.
 To remove it, delete the Rabbit Hole folder and Play Rabbit Hole.cmd.

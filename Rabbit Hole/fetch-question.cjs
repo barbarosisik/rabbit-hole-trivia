@@ -6,7 +6,7 @@ if (!['', '15', '20', '18', '24', '23', '21', '17'].includes(category)) {
   process.exit(1);
 }
 const url = new URL('https://opentdb.com/api.php');
-url.search = new URLSearchParams({amount:'1', type:'multiple', encode:'url3986', ...(category ? {category} : {})});
+url.search = new URLSearchParams({amount:'3', type:'multiple', encode:'url3986', ...(category ? {category} : {})});
 fetch(url, {cache:'no-store', credentials:'omit', signal:AbortSignal.timeout(18000)})
   .then(async response => {
     if (!response.ok) throw new Error('Question service unavailable');

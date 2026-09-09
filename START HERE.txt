@@ -1,18 +1,14 @@
-RABBIT HOLE - HOW TO PLAY
+RABBIT HOLE
 
-Double-click Play Rabbit Hole.cmd in this folder.
+MAC: Open Rabbit Hole.app from the Mac release ZIP.
+WINDOWS: Extract the Windows ZIP, then open Play Rabbit Hole.cmd.
+Windows background mode needs Node.js 24 or newer and Windows PowerShell 5.1.
 
-PLAY NOW
-Opens the normal ten-question game in your browser.
+Play now: ten questions, difficulty, chill/timed play, streaks and 50/50.
+Play from background: three questions per turn, every 15 minutes by default.
+Choose a category, answer each question, and click Next between questions.
+After answer three, your turn score appears for eight seconds and fades away.
 
-PLAY FROM BACKGROUND
-Choose an interval (15 minutes by default), then click Play from background.
-The window closes. A small prompt appears near the taskbar after each interval.
-Click it, choose a topic, answer the question, and let it fade away.
-
-Want to try it immediately? Right-click the Rabbit Hole system-tray icon and
-choose Question now. The icon may be under the ^ hidden-icons arrow.
-Use that menu to pause reminders or quit the background game.
-
-Internet required. No question dataset or scores are saved.
-The game files live in the hidden Rabbit Hole folder beside this launcher.
+Use the Mac menu-bar arrow or Windows tray icon to pause or quit.
+No questions, scores or settings are saved. No launch-at-login is installed.
+See README.md for download and setup instructions.
